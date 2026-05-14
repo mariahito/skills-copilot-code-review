@@ -1,136 +1,145 @@
 document.addEventListener("DOMContentLoaded", () => {
-  // DOM elements
   const activitiesList = document.getElementById("activities-list");
   const messageDiv = document.getElementById("message");
   const registrationModal = document.getElementById("registration-modal");
   const modalActivityName = document.getElementById("modal-activity-name");
   const signupForm = document.getElementById("signup-form");
   const activityInput = document.getElementById("activity");
-  const closeRegistrationModal = document.querySelector(".close-modal");
+  const closeRegistrationModal = document.getElementById("close-registration-modal");
 
-  // Search and filter elements
   const searchInput = document.getElementById("activity-search");
   const searchButton = document.getElementById("search-button");
   const categoryFilters = document.querySelectorAll(".category-filter");
   const dayFilters = document.querySelectorAll(".day-filter");
   const timeFilters = document.querySelectorAll(".time-filter");
 
-  // Authentication elements
   const loginButton = document.getElementById("login-button");
   const userInfo = document.getElementById("user-info");
   const displayName = document.getElementById("display-name");
   const logoutButton = document.getElementById("logout-button");
   const loginModal = document.getElementById("login-modal");
   const loginForm = document.getElementById("login-form");
-  const closeLoginModal = document.querySelector(".close-login-modal");
+  const closeLoginModal = document.getElementById("close-login-modal");
   const loginMessage = document.getElementById("login-message");
 
-  // Activity categories with corresponding colors
+  const announcementRegion = document.getElementById("announcement-region");
+  const announcementAdminButton = document.getElementById("announcement-admin-button");
+  const announcementModal = document.getElementById("announcement-modal");
+  const closeAnnouncementModal = document.getElementById("close-announcement-modal");
+  const announcementAdminList = document.getElementById("announcement-admin-list");
+  const announcementForm = document.getElementById("announcement-form");
+  const announcementFormTitle = document.getElementById("announcement-form-title");
+  const announcementFormMessage = document.getElementById("announcement-form-message");
+  const announcementIdInput = document.getElementById("announcement-id");
+  const announcementMessageInput = document.getElementById("announcement-message");
+  const announcementStartDateInput = document.getElementById("announcement-start-date");
+  const announcementExpiresAtInput = document.getElementById("announcement-expires-at");
+  const cancelAnnouncementEditButton = document.getElementById("cancel-announcement-edit");
+
   const activityTypes = {
     sports: { label: "Sports", color: "#e8f5e9", textColor: "#2e7d32" },
-    arts: { label: "Arts", color: "#f3e5f5", textColor: "#7b1fa2" },
+    arts: { label: "Arts", color: "#fff3e0", textColor: "#c2410c" },
     academic: { label: "Academic", color: "#e3f2fd", textColor: "#1565c0" },
-    community: { label: "Community", color: "#fff3e0", textColor: "#e65100" },
+    community: { label: "Community", color: "#fefce8", textColor: "#854d0e" },
     technology: { label: "Technology", color: "#e8eaf6", textColor: "#3949ab" },
   };
 
-  // State for activities and filters
+  const timeRanges = {
+    morning: { start: "06:00", end: "08:00" },
+    afternoon: { start: "15:00", end: "18:00" },
+    weekend: { days: ["Saturday", "Sunday"] },
+  };
+
   let allActivities = {};
+  let adminAnnouncements = [];
   let currentFilter = "all";
   let searchQuery = "";
   let currentDay = "";
   let currentTimeRange = "";
-
-  // Authentication state
   let currentUser = null;
 
-  // Time range mappings for the dropdown
-  const timeRanges = {
-    morning: { start: "06:00", end: "08:00" }, // Before school hours
-    afternoon: { start: "15:00", end: "18:00" }, // After school hours
-    weekend: { days: ["Saturday", "Sunday"] }, // Weekend days
-  };
+  function escapeHtml(text) {
+    if (!text) {
+      return "";
+    }
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
+  }
 
-  // Initialize filters from active elements
   function initializeFilters() {
-    // Initialize day filter
     const activeDayFilter = document.querySelector(".day-filter.active");
     if (activeDayFilter) {
       currentDay = activeDayFilter.dataset.day;
     }
 
-    // Initialize time filter
     const activeTimeFilter = document.querySelector(".time-filter.active");
     if (activeTimeFilter) {
       currentTimeRange = activeTimeFilter.dataset.time;
     }
   }
 
-  // Function to set day filter
   function setDayFilter(day) {
     currentDay = day;
-
-    // Update active class
-    dayFilters.forEach((btn) => {
-      if (btn.dataset.day === day) {
-        btn.classList.add("active");
-      } else {
-        btn.classList.remove("active");
-      }
-    });
-
+    dayFilters.forEach((btn) => btn.classList.toggle("active", btn.dataset.day === day));
     fetchActivities();
   }
 
-  // Function to set time range filter
   function setTimeRangeFilter(timeRange) {
     currentTimeRange = timeRange;
-
-    // Update active class
-    timeFilters.forEach((btn) => {
-      if (btn.dataset.time === timeRange) {
-        btn.classList.add("active");
-      } else {
-        btn.classList.remove("active");
-      }
-    });
-
+    timeFilters.forEach((btn) => btn.classList.toggle("active", btn.dataset.time === timeRange));
     fetchActivities();
   }
 
-  // Check if user is already logged in (from localStorage)
+  function updateAuthBodyClass() {
+    document.body.classList.toggle("not-authenticated", !currentUser);
+  }
+
+  function updateAuthUI() {
+    if (currentUser) {
+      loginButton.classList.add("hidden");
+      userInfo.classList.remove("hidden");
+      displayName.textContent = currentUser.display_name;
+      announcementAdminButton.classList.remove("hidden");
+    } else {
+      loginButton.classList.remove("hidden");
+      userInfo.classList.add("hidden");
+      displayName.textContent = "";
+      announcementAdminButton.classList.add("hidden");
+      if (!announcementModal.classList.contains("hidden")) {
+        closeAnnouncementModalHandler();
+      }
+    }
+
+    updateAuthBodyClass();
+    fetchActivities();
+  }
+
   function checkAuthentication() {
     const savedUser = localStorage.getItem("currentUser");
     if (savedUser) {
       try {
         currentUser = JSON.parse(savedUser);
         updateAuthUI();
-        // Verify the stored user with the server
         validateUserSession(currentUser.username);
       } catch (error) {
         console.error("Error parsing saved user", error);
-        logout(); // Clear invalid data
+        logout();
       }
     }
 
-    // Set authentication class on body
     updateAuthBodyClass();
   }
 
-  // Validate user session with the server
   async function validateUserSession(username) {
     try {
-      const response = await fetch(
-        `/auth/check-session?username=${encodeURIComponent(username)}`
-      );
+      const response = await fetch(`/auth/check-session?username=${encodeURIComponent(username)}`);
 
       if (!response.ok) {
-        // Session invalid, log out
         logout();
         return;
       }
 
-      // Session is valid, update user data
       const userData = await response.json();
       currentUser = userData;
       localStorage.setItem("currentUser", JSON.stringify(userData));
@@ -140,55 +149,19 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // Update UI based on authentication state
-  function updateAuthUI() {
-    if (currentUser) {
-      loginButton.classList.add("hidden");
-      userInfo.classList.remove("hidden");
-      displayName.textContent = currentUser.display_name;
-    } else {
-      loginButton.classList.remove("hidden");
-      userInfo.classList.add("hidden");
-      displayName.textContent = "";
-    }
-
-    updateAuthBodyClass();
-    // Refresh the activities to update the UI
-    fetchActivities();
-  }
-
-  // Update body class for CSS targeting
-  function updateAuthBodyClass() {
-    if (currentUser) {
-      document.body.classList.remove("not-authenticated");
-    } else {
-      document.body.classList.add("not-authenticated");
-    }
-  }
-
-  // Login function
   async function login(username, password) {
     try {
       const response = await fetch(
-        `/auth/login?username=${encodeURIComponent(
-          username
-        )}&password=${encodeURIComponent(password)}`,
-        {
-          method: "POST",
-        }
+        `/auth/login?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`,
+        { method: "POST" }
       );
 
       const data = await response.json();
-
       if (!response.ok) {
-        showLoginMessage(
-          data.detail || "Invalid username or password",
-          "error"
-        );
+        showLoginMessage(data.detail || "Invalid username or password", "error");
         return false;
       }
 
-      // Login successful
       currentUser = data;
       localStorage.setItem("currentUser", JSON.stringify(data));
       updateAuthUI();
@@ -202,7 +175,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // Logout function
   function logout() {
     currentUser = null;
     localStorage.removeItem("currentUser");
@@ -210,14 +182,12 @@ document.addEventListener("DOMContentLoaded", () => {
     showMessage("You have been logged out.", "info");
   }
 
-  // Show message in login modal
   function showLoginMessage(text, type) {
     loginMessage.textContent = text;
     loginMessage.className = `message ${type}`;
     loginMessage.classList.remove("hidden");
   }
 
-  // Open login modal
   function openLoginModal() {
     loginModal.classList.remove("hidden");
     loginModal.classList.add("show");
@@ -225,7 +195,6 @@ document.addEventListener("DOMContentLoaded", () => {
     loginForm.reset();
   }
 
-  // Close login modal
   function closeLoginModalHandler() {
     loginModal.classList.remove("show");
     setTimeout(() => {
@@ -234,32 +203,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 300);
   }
 
-  // Event listeners for authentication
-  loginButton.addEventListener("click", openLoginModal);
-  logoutButton.addEventListener("click", logout);
-  closeLoginModal.addEventListener("click", closeLoginModalHandler);
-
-  // Close login modal when clicking outside
-  window.addEventListener("click", (event) => {
-    if (event.target === loginModal) {
-      closeLoginModalHandler();
-    }
-  });
-
-  // Handle login form submission
-  loginForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const username = document.getElementById("username").value;
-    const password = document.getElementById("password").value;
-    await login(username, password);
-  });
-
-  // Show loading skeletons
   function showLoadingSkeletons() {
     activitiesList.innerHTML = "";
-
-    // Create more skeleton cards to fill the screen since they're smaller now
-    for (let i = 0; i < 9; i++) {
+    for (let i = 0; i < 9; i += 1) {
       const skeletonCard = document.createElement("div");
       skeletonCard.className = "skeleton-card";
       skeletonCard.innerHTML = `
@@ -278,33 +224,24 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // Format schedule for display - handles both old and new format
   function formatSchedule(details) {
-    // If schedule_details is available, use the structured data
     if (details.schedule_details) {
       const days = details.schedule_details.days.join(", ");
-
-      // Convert 24h time format to 12h AM/PM format for display
       const formatTime = (time24) => {
-        const [hours, minutes] = time24.split(":").map((num) => parseInt(num));
+        const [hours, minutes] = time24.split(":").map((num) => parseInt(num, 10));
         const period = hours >= 12 ? "PM" : "AM";
-        const displayHours = hours % 12 || 12; // Convert 0 to 12 for 12 AM
-        return `${displayHours}:${minutes
-          .toString()
-          .padStart(2, "0")} ${period}`;
+        const displayHours = hours % 12 || 12;
+        return `${displayHours}:${minutes.toString().padStart(2, "0")} ${period}`;
       };
 
       const startTime = formatTime(details.schedule_details.start_time);
       const endTime = formatTime(details.schedule_details.end_time);
-
       return `${days}, ${startTime} - ${endTime}`;
     }
 
-    // Fallback to the string format if schedule_details isn't available
     return details.schedule;
   }
 
-  // Function to determine activity type (this would ideally come from backend)
   function getActivityType(activityName, description) {
     const name = activityName.toLowerCase();
     const desc = description.toLowerCase();
@@ -319,7 +256,9 @@ document.addEventListener("DOMContentLoaded", () => {
       desc.includes("athletic")
     ) {
       return "sports";
-    } else if (
+    }
+
+    if (
       name.includes("art") ||
       name.includes("music") ||
       name.includes("theater") ||
@@ -328,7 +267,9 @@ document.addEventListener("DOMContentLoaded", () => {
       desc.includes("paint")
     ) {
       return "arts";
-    } else if (
+    }
+
+    if (
       name.includes("science") ||
       name.includes("math") ||
       name.includes("academic") ||
@@ -339,14 +280,18 @@ document.addEventListener("DOMContentLoaded", () => {
       desc.includes("competition")
     ) {
       return "academic";
-    } else if (
+    }
+
+    if (
       name.includes("volunteer") ||
       name.includes("community") ||
       desc.includes("service") ||
       desc.includes("volunteer")
     ) {
       return "community";
-    } else if (
+    }
+
+    if (
       name.includes("computer") ||
       name.includes("coding") ||
       name.includes("tech") ||
@@ -359,103 +304,67 @@ document.addEventListener("DOMContentLoaded", () => {
       return "technology";
     }
 
-    // Default to "academic" if no match
     return "academic";
   }
 
-  // Function to fetch activities from API with optional day and time filters
   async function fetchActivities() {
-    // Show loading skeletons first
     showLoadingSkeletons();
 
     try {
-      // Build query string with filters if they exist
-      let queryParams = [];
-
-      // Handle day filter
+      const queryParams = [];
       if (currentDay) {
         queryParams.push(`day=${encodeURIComponent(currentDay)}`);
       }
 
-      // Handle time range filter
       if (currentTimeRange) {
         const range = timeRanges[currentTimeRange];
-
-        // Handle weekend special case
-        if (currentTimeRange === "weekend") {
-          // Don't add time parameters for weekend filter
-          // Weekend filtering will be handled on the client side
-        } else if (range) {
-          // Add time parameters for before/after school
+        if (currentTimeRange !== "weekend" && range) {
           queryParams.push(`start_time=${encodeURIComponent(range.start)}`);
           queryParams.push(`end_time=${encodeURIComponent(range.end)}`);
         }
       }
 
-      const queryString =
-        queryParams.length > 0 ? `?${queryParams.join("&")}` : "";
+      const queryString = queryParams.length > 0 ? `?${queryParams.join("&")}` : "";
       const response = await fetch(`/activities${queryString}`);
-      const activities = await response.json();
-
-      // Save the activities data
-      allActivities = activities;
-
-      // Apply search and filter, and handle weekend filter in client
+      allActivities = await response.json();
       displayFilteredActivities();
     } catch (error) {
-      activitiesList.innerHTML =
-        "<p>Failed to load activities. Please try again later.</p>";
+      activitiesList.innerHTML = "<p>Failed to load activities. Please try again later.</p>";
       console.error("Error fetching activities:", error);
     }
   }
 
-  // Function to display filtered activities
   function displayFilteredActivities() {
-    // Clear the activities list
     activitiesList.innerHTML = "";
-
-    // Apply client-side filtering - this handles category filter and search, plus weekend filter
-    let filteredActivities = {};
+    const filteredActivities = {};
 
     Object.entries(allActivities).forEach(([name, details]) => {
       const activityType = getActivityType(name, details.description);
-
-      // Apply category filter
       if (currentFilter !== "all" && activityType !== currentFilter) {
         return;
       }
 
-      // Apply weekend filter if selected
       if (currentTimeRange === "weekend" && details.schedule_details) {
         const activityDays = details.schedule_details.days;
-        const isWeekendActivity = activityDays.some((day) =>
-          timeRanges.weekend.days.includes(day)
-        );
-
+        const isWeekendActivity = activityDays.some((day) => timeRanges.weekend.days.includes(day));
         if (!isWeekendActivity) {
           return;
         }
       }
 
-      // Apply search filter
       const searchableContent = [
         name.toLowerCase(),
         details.description.toLowerCase(),
         formatSchedule(details).toLowerCase(),
       ].join(" ");
 
-      if (
-        searchQuery &&
-        !searchableContent.includes(searchQuery.toLowerCase())
-      ) {
+      if (searchQuery && !searchableContent.includes(searchQuery.toLowerCase())) {
         return;
       }
 
-      // Activity passed all filters, add to filtered list
       filteredActivities[name] = details;
     });
 
-    // Check if there are any results
     if (Object.keys(filteredActivities).length === 0) {
       activitiesList.innerHTML = `
         <div class="no-results">
@@ -466,25 +375,21 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // Display filtered activities
     Object.entries(filteredActivities).forEach(([name, details]) => {
       renderActivityCard(name, details);
     });
   }
 
-  // Function to render a single activity card
   function renderActivityCard(name, details) {
     const activityCard = document.createElement("div");
     activityCard.className = "activity-card";
 
-    // Calculate spots and capacity
     const totalSpots = details.max_participants;
     const takenSpots = details.participants.length;
     const spotsLeft = totalSpots - takenSpots;
     const capacityPercentage = (takenSpots / totalSpots) * 100;
     const isFull = spotsLeft <= 0;
 
-    // Determine capacity status class
     let capacityStatusClass = "capacity-available";
     if (isFull) {
       capacityStatusClass = "capacity-full";
@@ -492,21 +397,16 @@ document.addEventListener("DOMContentLoaded", () => {
       capacityStatusClass = "capacity-near-full";
     }
 
-    // Determine activity type
     const activityType = getActivityType(name, details.description);
     const typeInfo = activityTypes[activityType];
-
-    // Format the schedule using the new helper function
     const formattedSchedule = formatSchedule(details);
 
-    // Create activity tag
     const tagHtml = `
       <span class="activity-tag" style="background-color: ${typeInfo.color}; color: ${typeInfo.textColor}">
         ${typeInfo.label}
       </span>
     `;
 
-    // Create capacity indicator
     const capacityIndicator = `
       <div class="capacity-container ${capacityStatusClass}">
         <div class="capacity-bar-bg">
@@ -539,7 +439,7 @@ document.addEventListener("DOMContentLoaded", () => {
               ${
                 currentUser
                   ? `
-                <span class="delete-participant tooltip" data-activity="${name}" data-email="${email}">
+                <span class="delete-participant tooltip" data-activity="${name}" data-email="${email}" role="button" aria-label="Unregister ${email}">
                   ✖
                   <span class="tooltip-text">Unregister this student</span>
                 </span>
@@ -556,9 +456,7 @@ document.addEventListener("DOMContentLoaded", () => {
         ${
           currentUser
             ? `
-          <button class="register-button" data-activity="${name}" ${
-                isFull ? "disabled" : ""
-              }>
+          <button class="register-button" data-activity="${name}" ${isFull ? "disabled" : ""}>
             ${isFull ? "Activity Full" : "Register Student"}
           </button>
         `
@@ -571,88 +469,27 @@ document.addEventListener("DOMContentLoaded", () => {
       </div>
     `;
 
-    // Add click handlers for delete buttons
-    const deleteButtons = activityCard.querySelectorAll(".delete-participant");
-    deleteButtons.forEach((button) => {
+    activityCard.querySelectorAll(".delete-participant").forEach((button) => {
       button.addEventListener("click", handleUnregister);
     });
 
-    // Add click handler for register button (only when authenticated)
     if (currentUser) {
       const registerButton = activityCard.querySelector(".register-button");
-      if (!isFull) {
-        registerButton.addEventListener("click", () => {
-          openRegistrationModal(name);
-        });
+      if (registerButton && !isFull) {
+        registerButton.addEventListener("click", () => openRegistrationModal(name));
       }
     }
 
     activitiesList.appendChild(activityCard);
   }
 
-  // Event listeners for search and filter
-  searchInput.addEventListener("input", (event) => {
-    searchQuery = event.target.value;
-    displayFilteredActivities();
-  });
-
-  searchButton.addEventListener("click", (event) => {
-    event.preventDefault();
-    searchQuery = searchInput.value;
-    displayFilteredActivities();
-  });
-
-  // Add event listeners to category filter buttons
-  categoryFilters.forEach((button) => {
-    button.addEventListener("click", () => {
-      // Update active class
-      categoryFilters.forEach((btn) => btn.classList.remove("active"));
-      button.classList.add("active");
-
-      // Update current filter and display filtered activities
-      currentFilter = button.dataset.category;
-      displayFilteredActivities();
-    });
-  });
-
-  // Add event listeners to day filter buttons
-  dayFilters.forEach((button) => {
-    button.addEventListener("click", () => {
-      // Update active class
-      dayFilters.forEach((btn) => btn.classList.remove("active"));
-      button.classList.add("active");
-
-      // Update current day filter and fetch activities
-      currentDay = button.dataset.day;
-      fetchActivities();
-    });
-  });
-
-  // Add event listeners for time filter buttons
-  timeFilters.forEach((button) => {
-    button.addEventListener("click", () => {
-      // Update active class
-      timeFilters.forEach((btn) => btn.classList.remove("active"));
-      button.classList.add("active");
-
-      // Update current time filter and fetch activities
-      currentTimeRange = button.dataset.time;
-      fetchActivities();
-    });
-  });
-
-  // Open registration modal
   function openRegistrationModal(activityName) {
     modalActivityName.textContent = activityName;
     activityInput.value = activityName;
     registrationModal.classList.remove("hidden");
-    // Add slight delay to trigger animation
-    setTimeout(() => {
-      registrationModal.classList.add("show");
-    }, 10);
+    setTimeout(() => registrationModal.classList.add("show"), 10);
   }
 
-  // Close registration modal
   function closeRegistrationModalHandler() {
     registrationModal.classList.remove("show");
     setTimeout(() => {
@@ -661,22 +498,291 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 300);
   }
 
-  // Event listener for close button
-  closeRegistrationModal.addEventListener(
-    "click",
-    closeRegistrationModalHandler
-  );
-
-  // Close modal when clicking outside of it
-  window.addEventListener("click", (event) => {
-    if (event.target === registrationModal) {
-      closeRegistrationModalHandler();
+  function toDateTimeLocalValue(dateString) {
+    if (!dateString) {
+      return "";
     }
-  });
 
-  // Create and show confirmation dialog
+    const parsed = new Date(dateString);
+    if (Number.isNaN(parsed.getTime())) {
+      return "";
+    }
+
+    const offset = parsed.getTimezoneOffset();
+    const localDate = new Date(parsed.getTime() - offset * 60000);
+    return localDate.toISOString().slice(0, 16);
+  }
+
+  function formatAnnouncementDateRange(announcement) {
+    const formatter = new Intl.DateTimeFormat(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+
+    const start = announcement.start_date ? formatter.format(new Date(announcement.start_date)) : "Now";
+    const expires = formatter.format(new Date(announcement.expires_at));
+    return `${start} - ${expires}`;
+  }
+
+  function renderPublicAnnouncements(announcements) {
+    if (!announcements || announcements.length === 0) {
+      announcementRegion.classList.add("hidden");
+      announcementRegion.innerHTML = "";
+      return;
+    }
+
+    announcementRegion.classList.remove("hidden");
+    announcementRegion.innerHTML = `
+      <div class="announcement-shell">
+        <h3>
+          <span aria-hidden="true">📢</span>
+          School Announcements
+        </h3>
+        <div class="announcement-scroll">
+          ${announcements
+            .map(
+              (announcement) => `
+            <article class="announcement-card" role="status">
+              <p>${escapeHtml(announcement.message)}</p>
+              <small>Visible: ${formatAnnouncementDateRange(announcement)}</small>
+            </article>
+          `
+            )
+            .join("")}
+        </div>
+      </div>
+    `;
+  }
+
+  async function fetchPublicAnnouncements() {
+    try {
+      const response = await fetch("/announcements");
+      if (!response.ok) {
+        renderPublicAnnouncements([]);
+        return;
+      }
+
+      const announcements = await response.json();
+      renderPublicAnnouncements(announcements);
+    } catch (error) {
+      console.error("Error fetching announcements:", error);
+      renderPublicAnnouncements([]);
+    }
+  }
+
+  function openAnnouncementModal() {
+    if (!currentUser) {
+      showMessage("Please sign in to manage announcements.", "error");
+      return;
+    }
+
+    resetAnnouncementForm();
+    announcementModal.classList.remove("hidden");
+    setTimeout(() => announcementModal.classList.add("show"), 10);
+    fetchAdminAnnouncements();
+  }
+
+  function closeAnnouncementModalHandler() {
+    announcementModal.classList.remove("show");
+    setTimeout(() => {
+      announcementModal.classList.add("hidden");
+      resetAnnouncementForm();
+      clearAnnouncementFormMessage();
+    }, 300);
+  }
+
+  function showAnnouncementFormMessage(text, type) {
+    announcementFormMessage.textContent = text;
+    announcementFormMessage.className = `message ${type}`;
+    announcementFormMessage.classList.remove("hidden");
+  }
+
+  function clearAnnouncementFormMessage() {
+    announcementFormMessage.textContent = "";
+    announcementFormMessage.className = "hidden message";
+  }
+
+  function resetAnnouncementForm() {
+    announcementForm.reset();
+    announcementIdInput.value = "";
+    announcementFormTitle.textContent = "Add New Announcement";
+    cancelAnnouncementEditButton.classList.add("hidden");
+  }
+
+  function renderAnnouncementAdminList() {
+    if (adminAnnouncements.length === 0) {
+      announcementAdminList.innerHTML = "<p class=\"muted\">No announcements yet. Add one using the form.</p>";
+      return;
+    }
+
+    announcementAdminList.innerHTML = adminAnnouncements
+      .map(
+        (announcement) => `
+      <article class="announcement-admin-card">
+        <p class="announcement-admin-message">${escapeHtml(announcement.message)}</p>
+        <p class="announcement-admin-dates">${formatAnnouncementDateRange(announcement)}</p>
+        <div class="announcement-admin-actions">
+          <button class="secondary-button edit-announcement" data-id="${announcement.id}">Edit</button>
+          <button class="danger-button delete-announcement" data-id="${announcement.id}">Delete</button>
+        </div>
+      </article>
+    `
+      )
+      .join("");
+
+    announcementAdminList.querySelectorAll(".edit-announcement").forEach((button) => {
+      button.addEventListener("click", () => startEditingAnnouncement(button.dataset.id));
+    });
+
+    announcementAdminList.querySelectorAll(".delete-announcement").forEach((button) => {
+      button.addEventListener("click", () => deleteAnnouncement(button.dataset.id));
+    });
+  }
+
+  async function fetchAdminAnnouncements() {
+    if (!currentUser) {
+      return;
+    }
+
+    announcementAdminList.innerHTML = "<p class=\"muted\">Loading announcements...</p>";
+    try {
+      const response = await fetch(
+        `/announcements?include_all=true&teacher_username=${encodeURIComponent(currentUser.username)}`
+      );
+
+      const data = await response.json();
+      if (!response.ok) {
+        showAnnouncementFormMessage(data.detail || "Failed to load announcements.", "error");
+        return;
+      }
+
+      adminAnnouncements = data;
+      renderAnnouncementAdminList();
+    } catch (error) {
+      console.error("Error loading announcements:", error);
+      showAnnouncementFormMessage("Failed to load announcements.", "error");
+    }
+  }
+
+  function startEditingAnnouncement(announcementId) {
+    const announcement = adminAnnouncements.find((item) => item.id === announcementId);
+    if (!announcement) {
+      return;
+    }
+
+    announcementIdInput.value = announcement.id;
+    announcementMessageInput.value = announcement.message;
+    announcementStartDateInput.value = toDateTimeLocalValue(announcement.start_date);
+    announcementExpiresAtInput.value = toDateTimeLocalValue(announcement.expires_at);
+    announcementFormTitle.textContent = "Edit Announcement";
+    cancelAnnouncementEditButton.classList.remove("hidden");
+    clearAnnouncementFormMessage();
+  }
+
+  function toIsoDateOrNull(value) {
+    if (!value) {
+      return null;
+    }
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+
+    return parsed.toISOString();
+  }
+
+  async function saveAnnouncement(event) {
+    event.preventDefault();
+
+    if (!currentUser) {
+      showAnnouncementFormMessage("Please sign in to manage announcements.", "error");
+      return;
+    }
+
+    const payload = {
+      message: announcementMessageInput.value.trim(),
+      start_date: toIsoDateOrNull(announcementStartDateInput.value),
+      expires_at: toIsoDateOrNull(announcementExpiresAtInput.value),
+    };
+
+    if (!payload.message || !payload.expires_at) {
+      showAnnouncementFormMessage("Message and expiration date are required.", "error");
+      return;
+    }
+
+    if (payload.start_date && new Date(payload.expires_at) <= new Date(payload.start_date)) {
+      showAnnouncementFormMessage("Expiration date must be later than start date.", "error");
+      return;
+    }
+
+    const editingId = announcementIdInput.value;
+    const url = editingId
+      ? `/announcements/${encodeURIComponent(editingId)}?teacher_username=${encodeURIComponent(currentUser.username)}`
+      : `/announcements?teacher_username=${encodeURIComponent(currentUser.username)}`;
+    const method = editingId ? "PUT" : "POST";
+
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        showAnnouncementFormMessage(data.detail || "Could not save announcement.", "error");
+        return;
+      }
+
+      showAnnouncementFormMessage(editingId ? "Announcement updated." : "Announcement added.", "success");
+      resetAnnouncementForm();
+      await fetchAdminAnnouncements();
+      await fetchPublicAnnouncements();
+    } catch (error) {
+      console.error("Error saving announcement:", error);
+      showAnnouncementFormMessage("Could not save announcement.", "error");
+    }
+  }
+
+  async function deleteAnnouncement(announcementId) {
+    if (!currentUser) {
+      showAnnouncementFormMessage("Please sign in to manage announcements.", "error");
+      return;
+    }
+
+    const target = adminAnnouncements.find((item) => item.id === announcementId);
+    const preview = target ? target.message.slice(0, 40) : "this announcement";
+    showConfirmationDialog(`Delete \"${preview}\"?`, async () => {
+      try {
+        const response = await fetch(
+          `/announcements/${encodeURIComponent(announcementId)}?teacher_username=${encodeURIComponent(currentUser.username)}`,
+          { method: "DELETE" }
+        );
+
+        const data = await response.json();
+        if (!response.ok) {
+          showAnnouncementFormMessage(data.detail || "Could not delete announcement.", "error");
+          return;
+        }
+
+        showAnnouncementFormMessage("Announcement deleted.", "success");
+        if (announcementIdInput.value === announcementId) {
+          resetAnnouncementForm();
+        }
+        await fetchAdminAnnouncements();
+        await fetchPublicAnnouncements();
+      } catch (error) {
+        console.error("Error deleting announcement:", error);
+        showAnnouncementFormMessage("Could not delete announcement.", "error");
+      }
+    });
+  }
+
   function showConfirmationDialog(message, confirmCallback) {
-    // Create the confirmation dialog if it doesn't exist
     let confirmDialog = document.getElementById("confirm-dialog");
     if (!confirmDialog) {
       confirmDialog = document.createElement("div");
@@ -686,107 +792,62 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="modal-content">
           <h3>Confirm Action</h3>
           <p id="confirm-message"></p>
-          <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
-            <button id="cancel-button" class="cancel-btn">Cancel</button>
-            <button id="confirm-button" class="confirm-btn">Confirm</button>
+          <div class="confirm-actions">
+            <button id="cancel-button" class="secondary-button">Cancel</button>
+            <button id="confirm-button" class="danger-button">Confirm</button>
           </div>
         </div>
       `;
       document.body.appendChild(confirmDialog);
-
-      // Style the buttons
-      const cancelBtn = confirmDialog.querySelector("#cancel-button");
-      const confirmBtn = confirmDialog.querySelector("#confirm-button");
-
-      cancelBtn.style.backgroundColor = "#f1f1f1";
-      cancelBtn.style.color = "#333";
-
-      confirmBtn.style.backgroundColor = "#dc3545";
-      confirmBtn.style.color = "white";
     }
 
-    // Set the message
     const confirmMessage = document.getElementById("confirm-message");
     confirmMessage.textContent = message;
 
-    // Show the dialog
     confirmDialog.classList.remove("hidden");
-    setTimeout(() => {
-      confirmDialog.classList.add("show");
-    }, 10);
+    setTimeout(() => confirmDialog.classList.add("show"), 10);
 
-    // Handle button clicks
     const cancelButton = document.getElementById("cancel-button");
     const confirmButton = document.getElementById("confirm-button");
 
-    // Remove any existing event listeners
     const newCancelButton = cancelButton.cloneNode(true);
     const newConfirmButton = confirmButton.cloneNode(true);
     cancelButton.parentNode.replaceChild(newCancelButton, cancelButton);
     confirmButton.parentNode.replaceChild(newConfirmButton, confirmButton);
 
-    // Add new event listeners
     newCancelButton.addEventListener("click", () => {
       confirmDialog.classList.remove("show");
-      setTimeout(() => {
-        confirmDialog.classList.add("hidden");
-      }, 300);
+      setTimeout(() => confirmDialog.classList.add("hidden"), 300);
     });
 
-    newConfirmButton.addEventListener("click", () => {
-      confirmCallback();
+    newConfirmButton.addEventListener("click", async () => {
+      await confirmCallback();
       confirmDialog.classList.remove("show");
-      setTimeout(() => {
-        confirmDialog.classList.add("hidden");
-      }, 300);
-    });
-
-    // Close when clicking outside
-    confirmDialog.addEventListener("click", (event) => {
-      if (event.target === confirmDialog) {
-        confirmDialog.classList.remove("show");
-        setTimeout(() => {
-          confirmDialog.classList.add("hidden");
-        }, 300);
-      }
+      setTimeout(() => confirmDialog.classList.add("hidden"), 300);
     });
   }
 
-  // Handle unregistration with confirmation
   async function handleUnregister(event) {
-    // Check if user is authenticated
     if (!currentUser) {
-      showMessage(
-        "You must be logged in as a teacher to unregister students.",
-        "error"
-      );
+      showMessage("You must be logged in as a teacher to unregister students.", "error");
       return;
     }
 
     const activity = event.target.dataset.activity;
     const email = event.target.dataset.email;
 
-    // Show confirmation dialog
     showConfirmationDialog(
       `Are you sure you want to unregister ${email} from ${activity}?`,
       async () => {
         try {
           const response = await fetch(
-            `/activities/${encodeURIComponent(
-              activity
-            )}/unregister?email=${encodeURIComponent(
-              email
-            )}&teacher_username=${encodeURIComponent(currentUser.username)}`,
-            {
-              method: "POST",
-            }
+            `/activities/${encodeURIComponent(activity)}/unregister?email=${encodeURIComponent(email)}&teacher_username=${encodeURIComponent(currentUser.username)}`,
+            { method: "POST" }
           );
 
           const result = await response.json();
-
           if (response.ok) {
             showMessage(result.message, "success");
-            // Refresh the activities list
             fetchActivities();
           } else {
             showMessage(result.detail || "An error occurred", "error");
@@ -799,28 +860,54 @@ document.addEventListener("DOMContentLoaded", () => {
     );
   }
 
-  // Show message function
   function showMessage(text, type) {
     messageDiv.textContent = text;
     messageDiv.className = `message ${type}`;
     messageDiv.classList.remove("hidden");
 
-    // Hide message after 5 seconds
     setTimeout(() => {
       messageDiv.classList.add("hidden");
     }, 5000);
   }
 
-  // Handle form submission
+  loginButton.addEventListener("click", openLoginModal);
+  logoutButton.addEventListener("click", logout);
+  closeLoginModal.addEventListener("click", closeLoginModalHandler);
+  closeRegistrationModal.addEventListener("click", closeRegistrationModalHandler);
+  announcementAdminButton.addEventListener("click", openAnnouncementModal);
+  closeAnnouncementModal.addEventListener("click", closeAnnouncementModalHandler);
+  announcementForm.addEventListener("submit", saveAnnouncement);
+  cancelAnnouncementEditButton.addEventListener("click", () => {
+    resetAnnouncementForm();
+    clearAnnouncementFormMessage();
+  });
+
+  window.addEventListener("click", (event) => {
+    if (event.target === loginModal) {
+      closeLoginModalHandler();
+    }
+
+    if (event.target === registrationModal) {
+      closeRegistrationModalHandler();
+    }
+
+    if (event.target === announcementModal) {
+      closeAnnouncementModalHandler();
+    }
+  });
+
+  loginForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const username = document.getElementById("username").value;
+    const password = document.getElementById("password").value;
+    await login(username, password);
+  });
+
   signupForm.addEventListener("submit", async (event) => {
     event.preventDefault();
 
-    // Check if user is authenticated
     if (!currentUser) {
-      showMessage(
-        "You must be logged in as a teacher to register students.",
-        "error"
-      );
+      showMessage("You must be logged in as a teacher to register students.", "error");
       return;
     }
 
@@ -829,22 +916,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
     try {
       const response = await fetch(
-        `/activities/${encodeURIComponent(
-          activity
-        )}/signup?email=${encodeURIComponent(
-          email
-        )}&teacher_username=${encodeURIComponent(currentUser.username)}`,
-        {
-          method: "POST",
-        }
+        `/activities/${encodeURIComponent(activity)}/signup?email=${encodeURIComponent(email)}&teacher_username=${encodeURIComponent(currentUser.username)}`,
+        { method: "POST" }
       );
 
       const result = await response.json();
-
       if (response.ok) {
         showMessage(result.message, "success");
         closeRegistrationModalHandler();
-        // Refresh the activities list after successful signup
         fetchActivities();
       } else {
         showMessage(result.detail || "An error occurred", "error");
@@ -855,14 +934,51 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Expose filter functions to window for future UI control
+  searchInput.addEventListener("input", (event) => {
+    searchQuery = event.target.value;
+    displayFilteredActivities();
+  });
+
+  searchButton.addEventListener("click", (event) => {
+    event.preventDefault();
+    searchQuery = searchInput.value;
+    displayFilteredActivities();
+  });
+
+  categoryFilters.forEach((button) => {
+    button.addEventListener("click", () => {
+      categoryFilters.forEach((btn) => btn.classList.remove("active"));
+      button.classList.add("active");
+      currentFilter = button.dataset.category;
+      displayFilteredActivities();
+    });
+  });
+
+  dayFilters.forEach((button) => {
+    button.addEventListener("click", () => {
+      dayFilters.forEach((btn) => btn.classList.remove("active"));
+      button.classList.add("active");
+      currentDay = button.dataset.day;
+      fetchActivities();
+    });
+  });
+
+  timeFilters.forEach((button) => {
+    button.addEventListener("click", () => {
+      timeFilters.forEach((btn) => btn.classList.remove("active"));
+      button.classList.add("active");
+      currentTimeRange = button.dataset.time;
+      fetchActivities();
+    });
+  });
+
   window.activityFilters = {
     setDayFilter,
     setTimeRangeFilter,
   };
 
-  // Initialize app
   checkAuthentication();
   initializeFilters();
   fetchActivities();
+  fetchPublicAnnouncements();
 });
