@@ -1630,7 +1630,7 @@ document.addEventListener("DOMContentLoaded", () => {
     announcementAdminList.innerHTML = adminAnnouncements
       .map(
         (announcement) => `
-      <article class="announcement-admin-item">
+      <article class="announcement-admin-card announcement-admin-item">
         <p class="announcement-admin-message">${announcement.message}</p>
         <p class="announcement-admin-dates">${formatAnnouncementDateRange(announcement)}</p>
         <div class="announcement-admin-actions">
