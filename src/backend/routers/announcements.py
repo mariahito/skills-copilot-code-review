@@ -57,7 +57,20 @@ def _to_utc(value: Optional[datetime]) -> Optional[datetime]:
     return value.astimezone(timezone.utc)
 
 
-def _serialize_announcement(announcement: Dict[str, Any]) -> Dict[str, Any]:
+def _serialize_announcement_public(announcement: Dict[str, Any]) -> Dict[str, Any]:
+    """Serialize announcement for public view (excludes created_by)."""
+    return {
+        "id": announcement["_id"],
+        "message": announcement["message"],
+        "start_date": announcement.get("start_date"),
+        "expires_at": announcement["expires_at"],
+        "created_at": announcement.get("created_at"),
+        "updated_at": announcement.get("updated_at"),
+    }
+
+
+def _serialize_announcement_admin(announcement: Dict[str, Any]) -> Dict[str, Any]:
+    """Serialize announcement for admin view (includes created_by)."""
     return {
         "id": announcement["_id"],
         "message": announcement["message"],
@@ -81,6 +94,7 @@ def get_announcements(
     if include_all:
         _validate_teacher_session(teacher_username)
         query = {}
+        serializer = _serialize_announcement_admin
     else:
         query = {
             "expires_at": {"$gte": now},
@@ -90,12 +104,13 @@ def get_announcements(
                 {"start_date": {"$lte": now}}
             ]
         }
+        serializer = _serialize_announcement_public
 
     announcements = announcements_collection.find(query).sort(
         [("expires_at", 1), ("created_at", -1)]
     )
 
-    return [_serialize_announcement(announcement) for announcement in announcements]
+    return [serializer(announcement) for announcement in announcements]
 
 
 @router.post("", response_model=Dict[str, Any])
@@ -125,7 +140,7 @@ def create_announcement(
 
     announcements_collection.insert_one(announcement)
 
-    return _serialize_announcement(announcement)
+    return _serialize_announcement_admin(announcement)
 
 
 @router.put("/{announcement_id}", response_model=Dict[str, Any])
@@ -158,7 +173,7 @@ def update_announcement(
         raise HTTPException(status_code=404, detail="Announcement not found")
 
     announcement = announcements_collection.find_one({"_id": announcement_id})
-    return _serialize_announcement(announcement)
+    return _serialize_announcement_admin(announcement)
 
 
 @router.delete("/{announcement_id}", response_model=Dict[str, str])
