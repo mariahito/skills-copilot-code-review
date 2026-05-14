@@ -58,6 +58,15 @@ document.addEventListener("DOMContentLoaded", () => {
   let currentTimeRange = "";
   let currentUser = null;
 
+  function escapeHtml(text) {
+    if (!text) {
+      return "";
+    }
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
   function initializeFilters() {
     const activeDayFilter = document.querySelector(".day-filter.active");
     if (activeDayFilter) {
@@ -537,7 +546,7 @@ document.addEventListener("DOMContentLoaded", () => {
             .map(
               (announcement) => `
             <article class="announcement-card" role="status">
-              <p>${announcement.message}</p>
+              <p>${escapeHtml(announcement.message)}</p>
               <small>Visible: ${formatAnnouncementDateRange(announcement)}</small>
             </article>
           `
@@ -613,7 +622,7 @@ document.addEventListener("DOMContentLoaded", () => {
       .map(
         (announcement) => `
       <article class="announcement-admin-card">
-        <p class="announcement-admin-message">${announcement.message}</p>
+        <p class="announcement-admin-message">${escapeHtml(announcement.message)}</p>
         <p class="announcement-admin-dates">${formatAnnouncementDateRange(announcement)}</p>
         <div class="announcement-admin-actions">
           <button class="secondary-button edit-announcement" data-id="${announcement.id}">Edit</button>
